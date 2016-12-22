@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">BTController</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_setting">Settings</string>
+    <string name="device_">Sensor</string>
+
+    <string name="unknown_characteristic">Unknown characteristic</string>
+    <string name="unknown_service">Unknown service</string>
+</resources>
