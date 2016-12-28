@@ -66,12 +66,9 @@ public class BluetoothLeService extends Service {
     
     private final int MAX_BYTES = 20;
     private int mTimesToSend = 0;
-    private int mTotalBytesToSend = 0;
     private int mCurrentSendCounter = 0;
     private byte[] dataToSend;
-
-    private String mCompleteReceivedString;
-    private boolean moreDataIncoming = false;
+    private boolean needToReport = false;
 
     // Implements callback methods for GATT events that the app cares about.  For example,
     // connection change and services discovered.
@@ -108,31 +105,38 @@ public class BluetoothLeService extends Service {
         @Override
         public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic ch, int status) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
+                Log.d(TAG, "onCharacteristicRead");
                 broadcastUpdate(ACTION_DATA_AVAILABLE, ch);
             }
         }
 
         @Override
         public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic ch) {
+            Log.d(TAG, "onCharacteristicChanged");
             broadcastUpdate(ACTION_DATA_AVAILABLE, ch);
         }
 
         @Override
         public void onCharacteristicWrite(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            Log.d(TAG, "onCharacteristicWrite status=" + status);
             if (BluetoothGatt.GATT_SUCCESS == status) {
                 mCurrentSendCounter++;
             }
             if (mTimesToSend > mCurrentSendCounter) {
                 int starter = mCurrentSendCounter * MAX_BYTES;
-                int entree = mTotalBytesToSend - starter;
-                int dessert = entree >= MAX_BYTES ? (starter + 19) : (starter + entree);
+                int entree = dataToSend.length - starter;
+                int dessert = entree >= MAX_BYTES ? (starter + 20) : (starter + entree);
                 byte data1[] = Arrays.copyOfRange(dataToSend, starter, dessert);
                 characteristic.setValue(data1);
                 mBluetoothGatt.writeCharacteristic(characteristic);
+                Log.d(TAG, "onCharacteristicWrite data1=" + new String(data1));
             } else {
+                if(needToReport) {
+                    broadcastUpdate("intent.bt.limits_set");
+                }
+                needToReport = false;
                 mTimesToSend = 0;
                 mCurrentSendCounter = 0;
-                mTotalBytesToSend = 0;
                 dataToSend = null;
             }
         }
@@ -170,24 +174,30 @@ public class BluetoothLeService extends Service {
                 intent.putExtra(EXTRA_DATA, new String(data) + "\n" + stringBuilder.toString());
                 */
                 String dataString = new String(data);
+                Log.d(TAG, "broadcastUpdate " + dataString);
                 SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
                 String completeData = "";
-                if(dataString.startsWith("{")) {
-                    if(dataString.endsWith("}")) {
+                if(dataString.contains("{")) {
+                    if(dataString.contains("}")) {
                         readyToSend = true;
-                        completeData = dataString;
+                        int startIndex = dataString.indexOf("{");
+                        int lastIndex = dataString.lastIndexOf("}");
+                        completeData = dataString.substring(startIndex, lastIndex + 1);
                     } else {
                         prefs.edit().clear().apply();
                         prefs.edit().putString("LE_INPUT", dataString).apply();
                         readyToSend = false;
                     }
-                } else if(dataString.endsWith("}")){
+                } else if(dataString.contains("}")){
                     String incompleteData = prefs.getString("LE_INPUT", "");
                     completeData = incompleteData + dataString;
                     // complete, can proceed
                     prefs.edit().clear().apply();
-                    if(completeData.startsWith("{") && completeData.endsWith("}")) {
+                    if(completeData.contains("{") && completeData.contains("}")) {
                         readyToSend = true; // valid JSON string
+                        int startIndex = completeData.indexOf("{");
+                        int lastIndex = completeData.lastIndexOf("}");
+                        completeData = completeData.substring(startIndex, lastIndex + 1);
                     } else {
                         readyToSend = false; // corrupted data, dump
                     }
@@ -200,6 +210,7 @@ public class BluetoothLeService extends Service {
                 }
 
                 if(readyToSend) {
+                    Log.d(TAG, "readyToSend=" + completeData);
                     intent.putExtra(EXTRA_DATA, completeData);
                 }
             }
@@ -339,21 +350,23 @@ public class BluetoothLeService extends Service {
         mBluetoothGatt.readCharacteristic(characteristic);
     }
 
-    public void writeCharacteristic(BluetoothGattCharacteristic characteristic) {
+    public void writeCharacteristic(BluetoothGattCharacteristic characteristic, boolean needToReport) {
         if (mBluetoothAdapter == null || mBluetoothGatt == null) {
             Log.w(TAG, "BluetoothAdapter not initialized");
             return;
         }
         dataToSend = characteristic.getValue();
-        mTotalBytesToSend = dataToSend.length;
-        mTimesToSend = mTotalBytesToSend / MAX_BYTES;
-        if(mTotalBytesToSend % MAX_BYTES > 0) {
+        mTimesToSend = dataToSend.length / MAX_BYTES;
+        if(dataToSend.length % MAX_BYTES > 0) {
             mTimesToSend++;
         }
 
-        byte data1[] = Arrays.copyOfRange(dataToSend, 0, 19);
+        byte data1[] = Arrays.copyOfRange(dataToSend, 0, 20);
         characteristic.setValue(data1);
+        Log.d(TAG, "writeCharacteristic data1=" + new String(data1));
         mBluetoothGatt.writeCharacteristic(characteristic);
+
+        this.needToReport = needToReport;
     }
 
     /**

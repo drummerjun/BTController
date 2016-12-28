@@ -9,19 +9,22 @@ import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
 import android.support.v4.content.res.ResourcesCompat;
+import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -31,14 +34,15 @@ import android.widget.Toast;
 import com.junyenhuang.btcontroller.ble.BluetoothLeService;
 import com.junyenhuang.btcontroller.ble.BluetoothSPP;
 import com.junyenhuang.btcontroller.ble.GattAttributes;
+import com.squareup.picasso.Picasso;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 
 public class MainActivity1 extends AppCompatActivity {
     private static final String TAG = MainActivity1.class.getSimpleName();
@@ -50,20 +54,51 @@ public class MainActivity1 extends AppCompatActivity {
     //----------- use for BLE ----------------------
     private BluetoothAdapter mBluetoothAdapter;
     private Handler mHandler;
-    private final String LIST_NAME = "";
-    private final String LIST_UUID = "";
+    private final String LIST_NAME = "NAME";
+    private final String LIST_UUID = "UUID";
     private int REQUEST_ENABLE_BT = 1;
     private String mDeviceName;
     private String mDeviceAddress="";
-    private BluetoothLeService mBluetoothLeService;
     private ArrayList<ArrayList<BluetoothGattCharacteristic>> mGattCharacteristics =
             new ArrayList<>();
     private boolean mConnected = false;
-    private BluetoothGattCharacteristic tx_channel;
-    private BluetoothGattCharacteristic rx_channel;
     private BluetoothSPP mBluetooth;
     private BluetoothGatt mGatt;
     private int mQueryID = 1;
+    private BTApp btApp;
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.main, menu);
+        invalidateOptionsMenu();
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if(item.getItemId() == R.id.action_test) {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle(R.string.app_name).setMessage(R.string.confirm_exit);
+            builder.setPositiveButton(getString(android.R.string.ok), new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    getSharedPreferences("DEVICES", MODE_PRIVATE).edit().clear().apply();
+                    //remove("MAC").apply();
+                    Intent intent = new Intent(MainActivity1.this, BarcodeActivity.class);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK | Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                }
+            });
+            builder.setNegativeButton(getString(android.R.string.cancel), new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    dialog.cancel();
+                }
+            });
+            builder.show();
+        }
+        return super.onOptionsItemSelected(item);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -71,12 +106,15 @@ public class MainActivity1 extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         initViews();
 
+        btApp = (BTApp)getApplication();
+
         mHandler = new Handler();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
             Toast.makeText(this, "BLE Not Supported", Toast.LENGTH_SHORT).show();
             finish();
         }
 
+        mDeviceAddress = getSharedPreferences("DEVICES", MODE_PRIVATE).getString("MAC", mDeviceAddress);
         Intent gattServiceIntent = new Intent(this, BluetoothLeService.class);
         bindService(gattServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
@@ -97,6 +135,7 @@ public class MainActivity1 extends AppCompatActivity {
             intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
             intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
             intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+            intentFilter.addAction("GET_VALUE");
             registerReceiver(mGattUpdateReceiver, intentFilter);
         }
     }
@@ -133,7 +172,8 @@ public class MainActivity1 extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unbindService(mServiceConnection);
-        mBluetoothLeService = null;
+        btApp.mBluetoothLeService = null;
+        btApp = null;
         if (mGatt == null) {
             return;
         }
@@ -174,17 +214,7 @@ public class MainActivity1 extends AppCompatActivity {
         mButtonLeft.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                SharedPreferences pref = getSharedPreferences("DEVICES", MODE_PRIVATE);
-                if(pref.getBoolean("BLE1", true)) {
-                    mQueryID = 1;
-                    refreshStats(mQueryID);
-                } else if(pref.getBoolean("BLE2", true)) {
-                    mQueryID = 2;
-                    refreshStats(mQueryID);
-                } else if(pref.getBoolean("BLE3", true)) {
-                    mQueryID = 3;
-                    refreshStats(mQueryID);
-                }
+                sendBroadcast(new Intent("GET_VALUE"));
             }
         });
 
@@ -196,13 +226,26 @@ public class MainActivity1 extends AppCompatActivity {
             }
         });
 
+        final ImageView button_left_image = (ImageView)findViewById(R.id.image_button_1);
+        final ImageView button_right_image = (ImageView)findViewById(R.id.image_button_2);
+
+        ImageView device_1_image = (ImageView)findViewById(R.id.device_image_1);
+        ImageView device_2_image = (ImageView)findViewById(R.id.device_image_2);
+        ImageView device_3_image = (ImageView)findViewById(R.id.device_image_3);
+        Picasso.with(this).load(R.drawable.circular).into(device_1_image);
+        Picasso.with(this).load(R.drawable.circular).into(device_2_image);
+        Picasso.with(this).load(R.drawable.circular).into(device_3_image);
+
         new Thread(new Runnable() {
             @Override
             public void run() {
                 final Drawable toolbarBg = ResourcesCompat.getDrawable(getResources(), R.drawable.head_bar, null);
                 final Drawable bg = ResourcesCompat.getDrawable(getResources(), R.drawable.background2, null);
                 final Drawable deviceBg = ResourcesCompat.getDrawable(getResources(), R.drawable.status_bg, null);
-                final Drawable buttonBg = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button, null);
+                final Drawable buttonBg = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
+                final Drawable buttonBg1 = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
+                final Drawable refreshButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_refresh, null);
+                final Drawable settingButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_setting, null);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -215,35 +258,40 @@ public class MainActivity1 extends AppCompatActivity {
                         device1.setBackground(deviceBg);
                         device2.setBackground(deviceBg);
                         device3.setBackground(deviceBg);
+                        button_left_image.setImageDrawable(refreshButton);
+                        button_right_image.setImageDrawable(settingButton);
+                        button_right.setBackground(buttonBg1);
                         mButtonLeft.setBackground(buttonBg);
-                        button_right.setBackground(buttonBg);
                     }
                 });
             }
         }).start();
-
-        ImageView device_1_image = (ImageView)findViewById(R.id.device_image_1);
-        ImageView device_2_image = (ImageView)findViewById(R.id.device_image_2);
-        ImageView device_3_image = (ImageView)findViewById(R.id.device_image_3);
-        ImageView button_left_image = (ImageView)findViewById(R.id.image_button_1);
-        ImageView button_right_image = (ImageView)findViewById(R.id.image_button_2);
-        // TODO: Picasso library to load image resource
     }
 
-    private void refreshStats(int queryID) {
-        mButtonLeft.setEnabled(false);
-        String leQueryString = "";
-        bleSend(leQueryString);
+    private void refreshStats() {
+        bleSend("");
     }
 
     private void enterSettingActivity() {
-
+        int numOfDevices = getSharedPreferences("DEVICES", MODE_PRIVATE).getInt("BLE", 0);
+        if(numOfDevices > 0) {
+            Intent intent = new Intent(MainActivity1.this, SettingActivity.class);
+            intent.putExtra("DEVICE_NUM", numOfDevices);
+            startActivity(intent);
+        } else {
+            Toast.makeText(this, R.string.no_device, Toast.LENGTH_LONG).show();
+        }
     }
 
     private void bleSend(String data){
+        Log.d(TAG, "connected=" + mConnected);
+        Log.d(TAG, "data=" + data);
         if(mConnected){
-            tx_channel.setValue(data);
-            mBluetoothLeService.writeCharacteristic(tx_channel);
+            btApp.tx_channel.setValue(data);
+            btApp.mBluetoothLeService.writeCharacteristic(btApp.tx_channel, false);
+        } else {
+            Toast.makeText(this, R.string.reboot, Toast.LENGTH_LONG).show();
+            recreate();
         }
     }
 
@@ -271,16 +319,16 @@ public class MainActivity1 extends AppCompatActivity {
 
             // Loops through available Characteristics.
             for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
-                Log.d(TAG, "service UUID=" + gattService.getUuid().toString());
-                Log.d(TAG, "characteristic UUID=" + gattCharacteristic.getUuid().toString());
+                //Log.d(TAG, "service UUID=" + gattService.getUuid().toString());
+                //Log.d(TAG, "characteristic UUID=" + gattCharacteristic.getUuid().toString());
                 charas.add(gattCharacteristic);
                 HashMap<String, String> currentCharaData = new HashMap<>();
                 uuid = gattCharacteristic.getUuid().toString();
                 if(uuid.equalsIgnoreCase(GattAttributes.BLE_TX_CHANNEL)){
-                    tx_channel = gattCharacteristic;
+                    btApp.tx_channel = gattCharacteristic;
                 }
                 if(uuid.equalsIgnoreCase(GattAttributes.BLE_RX_CHANNEL)){
-                    rx_channel = gattCharacteristic;
+                    btApp.rx_channel = gattCharacteristic;
                 }
                 currentCharaData.put(LIST_NAME, GattAttributes.lookup(uuid, unknownCharaString));
                 currentCharaData.put(LIST_UUID, uuid);
@@ -293,35 +341,38 @@ public class MainActivity1 extends AppCompatActivity {
 
     private void processIncomingData(String data) {
         Log.d(TAG, data);
-        if(data.equals("{}")) {
-            getSharedPreferences("DEVICES", MODE_PRIVATE).edit()
-                    .putBoolean("BLE" + String.valueOf(mQueryID), false).apply();
-        } else if(!data.isEmpty()) {
+        if(!data.isEmpty()) {
             try {
                 JSONObject json = new JSONObject(data);
                 String cmd = json.getString("");
                 if (cmd.equals("")) {
-                    int id = json.getInt("");
-                    String temp = json.getString("");
-                    String humidity = json.getString("");
-                    SharedPreferences prefs = getSharedPreferences("DEVICES", MODE_PRIVATE);
-                    prefs.edit().putBoolean("BLE" + String.valueOf(id), true).apply();
-                    switch (id) {
-                        case 1:
-                            device1.setVisibility(View.VISIBLE);
-                            temp1.setText(temp);
-                            humidity1.setText(humidity);
-                            break;
-                        case 2:
-                            device2.setVisibility(View.VISIBLE);
-                            temp2.setText(temp);
-                            humidity2.setText(humidity);
-                            break;
-                        case 3:
-                            device3.setVisibility(View.VISIBLE);
-                            temp3.setText(temp);
-                            humidity3.setText(humidity);
-                            break;
+                    //int id = json.getInt("ID");
+                    JSONArray tempArray = json.getJSONArray("");
+                    JSONArray humiArray = json.getJSONArray("");
+                    int numOfDevices = json.getInt("");
+                    getSharedPreferences("DEVICES", MODE_PRIVATE).edit().putInt("BLE", numOfDevices).apply();
+                    for (int i = 0; i < numOfDevices; i++) {
+                        String tempString = tempArray.get(i).toString();
+                        String humiString = humiArray.get(i).toString();
+                        double temp = Double.parseDouble(tempString) / 10;
+                        double humi = Double.parseDouble(humiString) / 10;
+                        switch (i) {
+                            case 0:
+                                device1.setVisibility(View.VISIBLE);
+                                temp1.setText(getString(R.string.temp) + ": " + String.valueOf(temp) + (char)0x00B0 + "C");
+                                humidity1.setText(getString(R.string.humi) + ": " + String.valueOf(humi) + "%");
+                                break;
+                            case 1:
+                                device2.setVisibility(View.VISIBLE);
+                                temp2.setText(getString(R.string.temp) + ": " + String.valueOf(temp) + (char)0x00B0 + "C");
+                                humidity2.setText(getString(R.string.humi) + ": " + String.valueOf(humi) + "%");
+                                break;
+                            case 2:
+                                device3.setVisibility(View.VISIBLE);
+                                temp3.setText(getString(R.string.temp) + ": " + String.valueOf(temp) + (char)0x00B0 + "C");
+                                humidity3.setText(getString(R.string.humi) + ": " + String.valueOf(humi) + "%");
+                                break;
+                        }
                     }
                 } else if (cmd.equals("echo")) {
                     Toast.makeText(MainActivity1.this, "Hi 你好 こんにちは", Toast.LENGTH_SHORT).show();
@@ -331,9 +382,6 @@ public class MainActivity1 extends AppCompatActivity {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        } else {
-            getSharedPreferences("DEVICES", MODE_PRIVATE).edit()
-                    .putBoolean("BLE" + String.valueOf(mQueryID), false).apply();
         }
     }
 
@@ -342,21 +390,21 @@ public class MainActivity1 extends AppCompatActivity {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             Log.d(TAG, "onServiceConnected");
-            mBluetoothLeService = ((BluetoothLeService.LocalBinder)service).getService();
-            if (!mBluetoothLeService.initialize()) {
+            btApp.mBluetoothLeService = ((BluetoothLeService.LocalBinder)service).getService();
+            if (!btApp.mBluetoothLeService.initialize()) {
                 Log.d(TAG, "mBluetoothLeService finish");
                 finish();
             }
             // Automatically connects to the device upon successful start-up initialization.
-            boolean result = mBluetoothLeService.connect(mDeviceAddress);
+            boolean result = btApp.mBluetoothLeService.connect(mDeviceAddress);
             Log.d(TAG, "service connection result=" + result);
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
             Log.d(TAG, "mBluetoothLeService onServiceDisconnected");
-            mBluetoothLeService.disconnect();
-            mBluetoothLeService = null;
+            btApp.mBluetoothLeService.disconnect();
+            btApp.mBluetoothLeService = null;
         }
     };
 
@@ -365,58 +413,30 @@ public class MainActivity1 extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
             if (BluetoothLeService.ACTION_GATT_CONNECTED.equals(action)) {
+                Log.d(TAG, "ACTION_GATT_CONNECTED");
                 mConnected = true;
             } else if (BluetoothLeService.ACTION_GATT_DISCONNECTED.equals(action)){
+                Log.d(TAG, "ACTION_GATT_DISCONNECTED");
                 mConnected = false;
             } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)){
+                Log.d(TAG, "ACTION_GATT_SERVICES_DISCOVERED");
                 // Show all the supported services and characteristics on the user interface.
-                displayGattServices(mBluetoothLeService.getSupportedGattServices());
-                mBluetoothLeService.setCharacteristicNotification(rx_channel, true);
+                displayGattServices(btApp.mBluetoothLeService.getSupportedGattServices());
+                btApp.mBluetoothLeService.setCharacteristicNotification(btApp.rx_channel, true);
 
-                SharedPreferences pref = getSharedPreferences("DEVICES", MODE_PRIVATE);
-                if(pref.getBoolean("BLE1", true)) {
-                    mQueryID = 1;
-                    refreshStats(mQueryID);
-                } else if(pref.getBoolean("BLE2", true)) {
-                    mQueryID = 2;
-                    refreshStats(mQueryID);
-                } else if(pref.getBoolean("BLE3", true)) {
-                    mQueryID = 3;
-                    refreshStats(mQueryID);
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
                 }
+                refreshStats();
             } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)){
+                Log.d(TAG, "ACTION_DATA_AVAILABLE");
                 String data = intent.getStringExtra(BluetoothLeService.EXTRA_DATA);
                 processIncomingData(data);
-
-                SharedPreferences pref = getSharedPreferences("DEVICES", MODE_PRIVATE);
-                switch (mQueryID) {
-                    case 1:
-                        if(pref.getBoolean("BLE2", true)) {
-                            mQueryID = 2;
-                            refreshStats(mQueryID);
-                        } else if(pref.getBoolean("BLE3", true)) {
-                            mQueryID = 3;
-                            refreshStats(mQueryID);
-                        } else {
-                            mQueryID = 1;
-                            mButtonLeft.setEnabled(true);
-                        }
-                        break;
-                    case 2:
-                        if(pref.getBoolean("BLE3", true)) {
-                            mQueryID = 3;
-                            refreshStats(mQueryID);
-                        } else {
-                            mQueryID = 1;
-                            mButtonLeft.setEnabled(true);
-                        }
-                        break;
-                    case 3:
-                        mQueryID = 1;
-                        mButtonLeft.setEnabled(true);
-                        break;
-                }
+            } else if(action.equals("GET_VALUE")) {
+                refreshStats();
             }
-        }
+         }
     };
 }
