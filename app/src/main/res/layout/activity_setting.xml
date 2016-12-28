@@ -5,7 +5,7 @@
     android:id="@+id/activity_main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="com.junyenhuang.btcontroller.MainActivity">
+    tools:context="com.junyenhuang.btcontroller.SettingActivity">
     <android.support.design.widget.AppBarLayout android:id="@+id/toolbarLayout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
