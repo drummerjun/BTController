@@ -1,9 +1,23 @@
 <resources>
-    <string name="app_name">BTController</string>
+    <string name="app_name">Nest Remote</string>
     <string name="action_refresh">Refresh</string>
     <string name="action_setting">Settings</string>
     <string name="device_">Sensor</string>
+    <string name="action_revert">Revert</string>
+    <string name="action_upload">Save</string>
+    <string name="action_reset">Scan new</string>
+    <string name="confirm_exit">Exit to scan another device?</string>
+    <string name="temp">Temp.</string>
+    <string name="humi">Humidity</string>
+    <string name="scan">Click to scan device MAC</string>
+    <string name="humi_title">Set Humidity Range</string>
 
     <string name="unknown_characteristic">Unknown characteristic</string>
     <string name="unknown_service">Unknown service</string>
+    <string name="no_device">No device detected</string>
+
+    <string name="reboot">Service disconnected, rebooting\u2026</string>
+    <string name="set_ok">Settings successfully updated.</string>
+    <string name="scan_error">Bluetooth error! LE may not be supported on this device, or try restarting the app.</string>
+    <string name="bad_mac">is not a valid BLE MAC Address.</string>
 </resources>

@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.content.res.ResourcesCompat;
@@ -224,7 +225,17 @@ public class SettingActivity1 extends AppCompatActivity {
     }
 
     private void uploadLimit() {
-        bleSend("\n", true);
+        JSONObject uploadObj = new JSONObject();
+        try {
+            uploadObj.put("", "");
+            oldLo1 = slider1.getThumb(0).getValue() * 10;
+            oldHi1 = slider1.getThumb(1).getValue() * 10;
+            uploadObj.put("", oldHi1);
+            uploadObj.put("", oldLo1);
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+        bleSend(uploadObj.toString() + "\n", true);
     }
 
     private void revertLimits() {
@@ -249,8 +260,14 @@ public class SettingActivity1 extends AppCompatActivity {
 
     private void bleSend(String data, boolean needToReport){
         Log.d(TAG, "data=" + data);
-        btApp.tx_channel.setValue(data);
-        btApp.mBluetoothLeService.writeCharacteristic(btApp.tx_channel, needToReport);
+        new AsyncTask<Object, Void, Void>() {
+            @Override
+            protected Void doInBackground(Object... params) {
+                btApp.getTX().setValue(params[0].toString());
+                btApp.getService().writeCharacteristic(btApp.getTX(), (boolean)params[1]);
+                return null;
+            }
+        }.execute(data, needToReport);
     }
 
     private void processIncomingData(String data) {
@@ -266,35 +283,6 @@ public class SettingActivity1 extends AppCompatActivity {
                     for (int i = 0; i < numOfDevices; i++) {
                         String lo = loArray.get(i).toString();
                         String hi = hiArray.get(i).toString();
-                        switch (i) {
-                            case 0:
-                                device1.setVisibility(View.VISIBLE);
-                                oldLo1 = Integer.parseInt(lo);
-                                oldHi1 = Integer.parseInt(hi);
-                                lo1.setText(String.valueOf(oldLo1/10));
-                                hi1.setText(String.valueOf(oldHi1/10));
-                                slider1.getThumb(0).setValue(oldLo1/10);
-                                slider1.getThumb(1).setValue(oldHi1/10);
-                                break;
-                            case 1:
-                                device2.setVisibility(View.VISIBLE);
-                                oldLo2 = Integer.parseInt(lo);
-                                oldHi2 = Integer.parseInt(hi);
-                                lo2.setText(String.valueOf(oldLo2/10));
-                                hi2.setText(String.valueOf(oldHi2/10));
-                                slider2.getThumb(0).setValue(oldLo2/10);
-                                slider2.getThumb(1).setValue(oldHi2/10);
-                                break;
-                            case 2:
-                                device3.setVisibility(View.VISIBLE);
-                                oldLo3 = Integer.parseInt(lo);
-                                oldHi3 = Integer.parseInt(hi);
-                                lo3.setText(String.valueOf(oldLo3/10));
-                                hi3.setText(String.valueOf(oldHi3/10));
-                                slider3.getThumb(0).setValue(oldLo3/10);
-                                slider3.getThumb(1).setValue(oldHi3/10);
-                                break;
-                        }
                     }
                 }
             } catch (JSONException e) {

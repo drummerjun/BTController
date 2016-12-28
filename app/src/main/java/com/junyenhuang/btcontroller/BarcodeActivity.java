@@ -17,7 +17,7 @@ import android.widget.RelativeLayout;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 
-public class BarcodeActivity1 extends AppCompatActivity {
+public class BarcodeActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -26,12 +26,12 @@ public class BarcodeActivity1 extends AppCompatActivity {
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (ContextCompat.checkSelfPermission(BarcodeActivity1.this,
+                if (ContextCompat.checkSelfPermission(BarcodeActivity.this,
                         Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(BarcodeActivity1.this,
+                    ActivityCompat.requestPermissions(BarcodeActivity.this,
                             new String[]{Manifest.permission.CAMERA}, 1);
                 } else {
-                    IntentIntegrator integrator = new IntentIntegrator(BarcodeActivity1.this);
+                    IntentIntegrator integrator = new IntentIntegrator(BarcodeActivity.this);
                     integrator.initiateScan();
                 }
             }
@@ -47,7 +47,7 @@ public class BarcodeActivity1 extends AppCompatActivity {
 
         String mac = getSharedPreferences("DEVICES", MODE_PRIVATE).getString("MAC", "");
         if(!mac.isEmpty()) {
-            Intent intent = new Intent(BarcodeActivity1.this, MainActivity.class);
+            Intent intent = new Intent(BarcodeActivity.this, MainActivity.class);
             startActivity(intent);
             finish();
         }
@@ -61,7 +61,7 @@ public class BarcodeActivity1 extends AppCompatActivity {
                 // If request is cancelled, the result arrays are empty.
                 if (grantResults.length > 0
                         && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    IntentIntegrator integrator = new IntentIntegrator(BarcodeActivity1.this);
+                    IntentIntegrator integrator = new IntentIntegrator(BarcodeActivity.this);
                     integrator.initiateScan();
                 } else {
                     //finish();
@@ -80,7 +80,7 @@ public class BarcodeActivity1 extends AppCompatActivity {
                 if (!re.isEmpty()) {
                     getSharedPreferences("DEVICES", MODE_PRIVATE).edit()
                             .putString("MAC", re).apply();
-                    Intent intent1 = new Intent(BarcodeActivity1.this, MainActivity.class);
+                    Intent intent1 = new Intent(BarcodeActivity.this, MainActivity.class);
                     startActivity(intent1);
                     finish();
                 }

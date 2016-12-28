@@ -15,6 +15,7 @@ import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.graphics.drawable.Drawable;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -54,17 +55,15 @@ public class MainActivity1 extends AppCompatActivity {
     //----------- use for BLE ----------------------
     private BluetoothAdapter mBluetoothAdapter;
     private Handler mHandler;
-    private final String LIST_NAME = "NAME";
-    private final String LIST_UUID = "UUID";
+    private final String LIST_NAME = "";
+    private final String LIST_UUID = "";
     private int REQUEST_ENABLE_BT = 1;
-    private String mDeviceName;
     private String mDeviceAddress="";
     private ArrayList<ArrayList<BluetoothGattCharacteristic>> mGattCharacteristics =
             new ArrayList<>();
     private boolean mConnected = false;
     private BluetoothSPP mBluetooth;
     private BluetoothGatt mGatt;
-    private int mQueryID = 1;
     private BTApp btApp;
 
     @Override
@@ -135,7 +134,8 @@ public class MainActivity1 extends AppCompatActivity {
             intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
             intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
             intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
-            intentFilter.addAction("GET_VALUE");
+            intentFilter.addAction("intent.bt.get_value");
+            intentFilter.addAction("intent.bt.bad_mac");
             registerReceiver(mGattUpdateReceiver, intentFilter);
         }
     }
@@ -172,7 +172,7 @@ public class MainActivity1 extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unbindService(mServiceConnection);
-        btApp.mBluetoothLeService = null;
+        btApp.setService(null);
         btApp = null;
         if (mGatt == null) {
             return;
@@ -214,7 +214,7 @@ public class MainActivity1 extends AppCompatActivity {
         mButtonLeft.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                sendBroadcast(new Intent("GET_VALUE"));
+                sendBroadcast(new Intent("intent.bt.get_value"));
             }
         });
 
@@ -236,36 +236,45 @@ public class MainActivity1 extends AppCompatActivity {
         Picasso.with(this).load(R.drawable.circular).into(device_2_image);
         Picasso.with(this).load(R.drawable.circular).into(device_3_image);
 
-        new Thread(new Runnable() {
+        new AsyncTask<Void, Void, Void>() {
+            Drawable toolbarBg;
+            Drawable bg;
+            Drawable deviceBg;
+            Drawable buttonBg;
+            Drawable buttonBg1;
+            Drawable refreshButton;
+            Drawable settingButton;
+
             @Override
-            public void run() {
-                final Drawable toolbarBg = ResourcesCompat.getDrawable(getResources(), R.drawable.head_bar, null);
-                final Drawable bg = ResourcesCompat.getDrawable(getResources(), R.drawable.background2, null);
-                final Drawable deviceBg = ResourcesCompat.getDrawable(getResources(), R.drawable.status_bg, null);
-                final Drawable buttonBg = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
-                final Drawable buttonBg1 = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
-                final Drawable refreshButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_refresh, null);
-                final Drawable settingButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_setting, null);
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        try {
-                            getSupportActionBar().setBackgroundDrawable(toolbarBg);
-                        } catch (NullPointerException e) {
-                            e.printStackTrace();
-                        }
-                        getWindow().setBackgroundDrawable(bg);
-                        device1.setBackground(deviceBg);
-                        device2.setBackground(deviceBg);
-                        device3.setBackground(deviceBg);
-                        button_left_image.setImageDrawable(refreshButton);
-                        button_right_image.setImageDrawable(settingButton);
-                        button_right.setBackground(buttonBg1);
-                        mButtonLeft.setBackground(buttonBg);
-                    }
-                });
+            protected Void doInBackground(Void... params) {
+                toolbarBg = ResourcesCompat.getDrawable(getResources(), R.drawable.head_bar, null);
+                bg = ResourcesCompat.getDrawable(getResources(), R.drawable.background2, null);
+                deviceBg = ResourcesCompat.getDrawable(getResources(), R.drawable.status_bg, null);
+                buttonBg = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
+                buttonBg1 = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
+                refreshButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_refresh, null);
+                settingButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_setting, null);
+                return null;
             }
-        }).start();
+
+            @Override
+            protected void onPostExecute(Void aVoid) {
+                super.onPostExecute(aVoid);
+                try {
+                    getSupportActionBar().setBackgroundDrawable(toolbarBg);
+                } catch (NullPointerException e) {
+                    e.printStackTrace();
+                }
+                getWindow().setBackgroundDrawable(bg);
+                device1.setBackground(deviceBg);
+                device2.setBackground(deviceBg);
+                device3.setBackground(deviceBg);
+                button_left_image.setImageDrawable(refreshButton);
+                button_right_image.setImageDrawable(settingButton);
+                button_right.setBackground(buttonBg1);
+                mButtonLeft.setBackground(buttonBg);
+            }
+        }.execute();
     }
 
     private void refreshStats() {
@@ -287,8 +296,35 @@ public class MainActivity1 extends AppCompatActivity {
         Log.d(TAG, "connected=" + mConnected);
         Log.d(TAG, "data=" + data);
         if(mConnected){
-            btApp.tx_channel.setValue(data);
-            btApp.mBluetoothLeService.writeCharacteristic(btApp.tx_channel, false);
+            new AsyncTask<String, Void, Boolean>() {
+                @Override
+                protected Boolean doInBackground(String... params) {
+                    try {
+                        btApp.getTX().setValue(params[0]);
+                        btApp.getService().writeCharacteristic(btApp.getTX(), false);
+                    } catch (NullPointerException ex) {
+                        ex.printStackTrace();
+                        return false;
+                    }
+                    return true;
+                }
+
+                @Override
+                protected void onPostExecute(Boolean success) {
+                    super.onPostExecute(success);
+                    if(!success) {
+                        AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity1.this);
+                        builder.setTitle(R.string.app_name).setMessage(R.string.scan_error);
+                        builder.setNeutralButton(android.R.string.ok,
+                                new DialogInterface.OnClickListener() {
+                                    public void onClick(DialogInterface dialog, int which) {
+                                        dialog.dismiss();
+                                    }
+                                });
+                        builder.create().show();
+                    }
+                }
+            }.execute(data);
         } else {
             Toast.makeText(this, R.string.reboot, Toast.LENGTH_LONG).show();
             recreate();
@@ -319,16 +355,17 @@ public class MainActivity1 extends AppCompatActivity {
 
             // Loops through available Characteristics.
             for (BluetoothGattCharacteristic gattCharacteristic : gattCharacteristics) {
-                //Log.d(TAG, "service UUID=" + gattService.getUuid().toString());
-                //Log.d(TAG, "characteristic UUID=" + gattCharacteristic.getUuid().toString());
+                //Log.w(TAG, "service UUID=" + gattService.getUuid().toString());
+                //Log.w(TAG, "characteristic UUID=" + gattCharacteristic.getUuid().toString());
                 charas.add(gattCharacteristic);
                 HashMap<String, String> currentCharaData = new HashMap<>();
                 uuid = gattCharacteristic.getUuid().toString();
                 if(uuid.equalsIgnoreCase(GattAttributes.BLE_TX_CHANNEL)){
-                    btApp.tx_channel = gattCharacteristic;
+                    btApp.setTX(gattCharacteristic);
                 }
                 if(uuid.equalsIgnoreCase(GattAttributes.BLE_RX_CHANNEL)){
-                    btApp.rx_channel = gattCharacteristic;
+                    btApp.setRX(gattCharacteristic);
+                    btApp.getService().setCharacteristicNotification(btApp.getRX(), true);
                 }
                 currentCharaData.put(LIST_NAME, GattAttributes.lookup(uuid, unknownCharaString));
                 currentCharaData.put(LIST_UUID, uuid);
@@ -354,25 +391,6 @@ public class MainActivity1 extends AppCompatActivity {
                     for (int i = 0; i < numOfDevices; i++) {
                         String tempString = tempArray.get(i).toString();
                         String humiString = humiArray.get(i).toString();
-                        double temp = Double.parseDouble(tempString) / 10;
-                        double humi = Double.parseDouble(humiString) / 10;
-                        switch (i) {
-                            case 0:
-                                device1.setVisibility(View.VISIBLE);
-                                temp1.setText(getString(R.string.temp) + ": " + String.valueOf(temp) + (char)0x00B0 + "C");
-                                humidity1.setText(getString(R.string.humi) + ": " + String.valueOf(humi) + "%");
-                                break;
-                            case 1:
-                                device2.setVisibility(View.VISIBLE);
-                                temp2.setText(getString(R.string.temp) + ": " + String.valueOf(temp) + (char)0x00B0 + "C");
-                                humidity2.setText(getString(R.string.humi) + ": " + String.valueOf(humi) + "%");
-                                break;
-                            case 2:
-                                device3.setVisibility(View.VISIBLE);
-                                temp3.setText(getString(R.string.temp) + ": " + String.valueOf(temp) + (char)0x00B0 + "C");
-                                humidity3.setText(getString(R.string.humi) + ": " + String.valueOf(humi) + "%");
-                                break;
-                        }
                     }
                 } else if (cmd.equals("echo")) {
                     Toast.makeText(MainActivity1.this, "Hi 你好 こんにちは", Toast.LENGTH_SHORT).show();
@@ -390,21 +408,22 @@ public class MainActivity1 extends AppCompatActivity {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
             Log.d(TAG, "onServiceConnected");
-            btApp.mBluetoothLeService = ((BluetoothLeService.LocalBinder)service).getService();
-            if (!btApp.mBluetoothLeService.initialize()) {
+            btApp.setService(((BluetoothLeService.LocalBinder)service).getService());
+            if (!btApp.getService().initialize()) {
                 Log.d(TAG, "mBluetoothLeService finish");
                 finish();
             }
             // Automatically connects to the device upon successful start-up initialization.
-            boolean result = btApp.mBluetoothLeService.connect(mDeviceAddress);
+            boolean result = btApp.getService().connect(mDeviceAddress);
+            //ble_send("{\"CMD\":\"echo\"}\n");
             Log.d(TAG, "service connection result=" + result);
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
             Log.d(TAG, "mBluetoothLeService onServiceDisconnected");
-            btApp.mBluetoothLeService.disconnect();
-            btApp.mBluetoothLeService = null;
+            btApp.getService().disconnect();
+            btApp.setService(null);
         }
     };
 
@@ -421,21 +440,42 @@ public class MainActivity1 extends AppCompatActivity {
             } else if (BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED.equals(action)){
                 Log.d(TAG, "ACTION_GATT_SERVICES_DISCOVERED");
                 // Show all the supported services and characteristics on the user interface.
-                displayGattServices(btApp.mBluetoothLeService.getSupportedGattServices());
-                btApp.mBluetoothLeService.setCharacteristicNotification(btApp.rx_channel, true);
-
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                refreshStats();
+                new AsyncTask<Void, Void, Void>() {
+                    @Override
+                    protected Void doInBackground(Void... params) {
+                        displayGattServices(btApp.getService().getSupportedGattServices());
+                        return null;
+                    }
+                    @Override
+                    protected void onPostExecute(Void aVoid) {
+                        super.onPostExecute(aVoid);
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
+                        //refreshStats();
+                        sendBroadcast(new Intent("intent.bt.get_value"));
+                    }
+                }.execute();
             } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)){
                 Log.d(TAG, "ACTION_DATA_AVAILABLE");
                 String data = intent.getStringExtra(BluetoothLeService.EXTRA_DATA);
                 processIncomingData(data);
-            } else if(action.equals("GET_VALUE")) {
+            } else if(action.equals("intent.bt.get_value")) {
                 refreshStats();
+            } else if(action.equals("intent.bt.bad_mac")) {
+                String badMacString = intent.getStringExtra("BAD_MAC");
+                String messageString = badMacString + " " + getString(R.string.bad_mac);
+                AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity1.this);
+                builder.setTitle(R.string.app_name).setMessage(messageString);
+                builder.setNeutralButton(android.R.string.ok,
+                        new DialogInterface.OnClickListener() {
+                            public void onClick(DialogInterface dialog, int which) {
+                                dialog.dismiss();
+                            }
+                        });
+                builder.create().show();
             }
          }
     };

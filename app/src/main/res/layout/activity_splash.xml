@@ -17,7 +17,7 @@
             android:textAppearance="@style/TextAppearance.AppCompat.Large"
             android:textStyle="bold"
             android:textAllCaps="true"
-            android:textColor="@android:color/black"
+            android:textColor="@color/colorPrimary"
             android:text="@string/app_name"/>
     </RelativeLayout>
     <RelativeLayout android:id="@+id/hint_layout"
@@ -45,7 +45,7 @@
         android:layout_height="wrap_content"
         android:layout_margin="56dp"
         app:fabSize="normal"
-        app:srcCompat="@drawable/qr_code"
+        app:srcCompat="@drawable/scan"
         app:layout_anchor="@id/hint_layout"
         app:layout_anchorGravity="top|center_horizontal"/>
 </android.support.design.widget.CoordinatorLayout>
