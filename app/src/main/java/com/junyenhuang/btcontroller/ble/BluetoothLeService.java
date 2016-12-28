@@ -131,7 +131,7 @@ public class BluetoothLeService extends Service {
                 mBluetoothGatt.writeCharacteristic(characteristic);
                 Log.d(TAG, "onCharacteristicWrite data1=" + new String(data1));
             } else {
-                if(needToReport) {
+                if(BluetoothGatt.GATT_SUCCESS == status && needToReport) {
                     broadcastUpdate("intent.bt.limits_set");
                 }
                 needToReport = false;
