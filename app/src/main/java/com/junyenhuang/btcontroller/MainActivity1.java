@@ -14,12 +14,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
 import android.os.IBinder;
-import android.support.v4.content.res.ResourcesCompat;
+import android.support.v4.content.ContextCompat;
+import android.support.v4.util.Pair;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -33,9 +35,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.junyenhuang.btcontroller.ble.BluetoothLeService;
-import com.junyenhuang.btcontroller.ble.BluetoothSPP;
 import com.junyenhuang.btcontroller.ble.GattAttributes;
 import com.squareup.picasso.Picasso;
+import com.squareup.picasso.Target;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -50,11 +52,10 @@ public class MainActivity1 extends AppCompatActivity {
     private RelativeLayout device1, device2, device3;
     private TextView temp1, temp2, temp3;
     private TextView humidity1, humidity2, humidity3;
-    private RelativeLayout mButtonLeft;
 
     //----------- use for BLE ----------------------
     private BluetoothAdapter mBluetoothAdapter;
-    private Handler mHandler;
+    //private Handler mHandler;
     private final String LIST_NAME = "";
     private final String LIST_UUID = "";
     private int REQUEST_ENABLE_BT = 1;
@@ -62,9 +63,10 @@ public class MainActivity1 extends AppCompatActivity {
     private ArrayList<ArrayList<BluetoothGattCharacteristic>> mGattCharacteristics =
             new ArrayList<>();
     private boolean mConnected = false;
-    private BluetoothSPP mBluetooth;
+    //private BluetoothSPP mBluetooth;
     private BluetoothGatt mGatt;
     private BTApp btApp;
+    private Target mToolbarTarget, mDeviceTarget;
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -104,10 +106,9 @@ public class MainActivity1 extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initViews();
-
         btApp = (BTApp)getApplication();
 
-        mHandler = new Handler();
+        //mHandler = new Handler();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
             Toast.makeText(this, "BLE Not Supported", Toast.LENGTH_SHORT).show();
             finish();
@@ -125,18 +126,18 @@ public class MainActivity1 extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
+        IntentFilter intentFilter = new IntentFilter();
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
+        intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
+        intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
+        intentFilter.addAction("intent.bt.get_value");
+        intentFilter.addAction("intent.bt.bad_mac");
+        registerReceiver(mGattUpdateReceiver, intentFilter);
+
         if (mBluetoothAdapter == null || !mBluetoothAdapter.isEnabled()) {
             Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-        } else {
-            IntentFilter intentFilter = new IntentFilter();
-            intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
-            intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
-            intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
-            intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
-            intentFilter.addAction("intent.bt.get_value");
-            intentFilter.addAction("intent.bt.bad_mac");
-            registerReceiver(mGattUpdateReceiver, intentFilter);
         }
     }
 
@@ -146,14 +147,7 @@ public class MainActivity1 extends AppCompatActivity {
             if (resultCode == Activity.RESULT_CANCELED) {
                 finish();
                 return;
-            } else {
-                IntentFilter intentFilter = new IntentFilter();
-                intentFilter.addAction(BluetoothLeService.ACTION_GATT_CONNECTED);
-                intentFilter.addAction(BluetoothLeService.ACTION_GATT_DISCONNECTED);
-                intentFilter.addAction(BluetoothLeService.ACTION_GATT_SERVICES_DISCOVERED);
-                intentFilter.addAction(BluetoothLeService.ACTION_DATA_AVAILABLE);
-                registerReceiver(mGattUpdateReceiver, intentFilter);
-              }
+            }
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
@@ -210,15 +204,15 @@ public class MainActivity1 extends AppCompatActivity {
         humidity2 = (TextView)findViewById(R.id.device_humid_2);
         humidity3 = (TextView)findViewById(R.id.device_humid_3);
 
-        mButtonLeft = (RelativeLayout)findViewById(R.id.bottom_button_1);
-        mButtonLeft.setOnClickListener(new View.OnClickListener() {
+        RelativeLayout button_left = (RelativeLayout)findViewById(R.id.bottom_button_1);
+        button_left.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 sendBroadcast(new Intent("intent.bt.get_value"));
             }
         });
 
-        final RelativeLayout button_right = (RelativeLayout)findViewById(R.id.bottom_button_2);
+        RelativeLayout button_right = (RelativeLayout)findViewById(R.id.bottom_button_2);
         button_right.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -226,8 +220,8 @@ public class MainActivity1 extends AppCompatActivity {
             }
         });
 
-        final ImageView button_left_image = (ImageView)findViewById(R.id.image_button_1);
-        final ImageView button_right_image = (ImageView)findViewById(R.id.image_button_2);
+        ImageView button_left_image = (ImageView)findViewById(R.id.image_button_1);
+        ImageView button_right_image = (ImageView)findViewById(R.id.image_button_2);
 
         ImageView device_1_image = (ImageView)findViewById(R.id.device_image_1);
         ImageView device_2_image = (ImageView)findViewById(R.id.device_image_2);
@@ -236,45 +230,69 @@ public class MainActivity1 extends AppCompatActivity {
         Picasso.with(this).load(R.drawable.circular).into(device_2_image);
         Picasso.with(this).load(R.drawable.circular).into(device_3_image);
 
-        new AsyncTask<Void, Void, Void>() {
-            Drawable toolbarBg;
-            Drawable bg;
-            Drawable deviceBg;
-            Drawable buttonBg;
-            Drawable buttonBg1;
-            Drawable refreshButton;
-            Drawable settingButton;
-
+        mToolbarTarget = new Target(){
             @Override
-            protected Void doInBackground(Void... params) {
-                toolbarBg = ResourcesCompat.getDrawable(getResources(), R.drawable.head_bar, null);
-                bg = ResourcesCompat.getDrawable(getResources(), R.drawable.background2, null);
-                deviceBg = ResourcesCompat.getDrawable(getResources(), R.drawable.status_bg, null);
-                buttonBg = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
-                buttonBg1 = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
-                refreshButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_refresh, null);
-                settingButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_setting, null);
-                return null;
+            public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+                getSupportActionBar().setBackgroundDrawable(new BitmapDrawable(getResources(), bitmap));
             }
 
             @Override
-            protected void onPostExecute(Void aVoid) {
-                super.onPostExecute(aVoid);
-                try {
-                    getSupportActionBar().setBackgroundDrawable(toolbarBg);
-                } catch (NullPointerException e) {
-                    e.printStackTrace();
+            public void onBitmapFailed(Drawable errorDrawable) {
+                Log.e(TAG, "Picasso windowsBg failed");
+            }
+
+            @Override
+            public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+            }
+        };
+        mDeviceTarget = new Target(){
+            @Override
+            public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+                device1.setBackground(new BitmapDrawable(getResources(), bitmap));
+                device2.setBackground(new BitmapDrawable(getResources(), bitmap));
+                device3.setBackground(new BitmapDrawable(getResources(), bitmap));
+            }
+
+            @Override
+            public void onBitmapFailed(Drawable errorDrawable) {
+                Log.e(TAG, "Picasso deviceBG failed");
+            }
+
+            @Override
+            public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+            }
+        };
+        Picasso.with(this).load(R.drawable.head_bar).into(mToolbarTarget);
+        Picasso.with(this).load(R.drawable.status_bg).into(mDeviceTarget);
+
+        loadAndSetDrawable(R.drawable.selector_button_bg, button_left);
+        loadAndSetDrawable(R.drawable.selector_button_bg, button_right);
+        loadAndSetDrawable(R.drawable.selector_refresh, button_left_image);
+        loadAndSetDrawable(R.drawable.selector_setting, button_right_image);
+    }
+
+    private void loadAndSetDrawable(final int resId, View targetView) {
+        new AsyncTask<View, Void, Pair<Drawable, View>>() {
+            @Override
+            protected Pair<Drawable, View> doInBackground(View... params) {
+                Drawable drawable = ContextCompat.getDrawable(MainActivity1.this, resId);
+                return new Pair<>(drawable, params[0]);
+            }
+
+            @Override
+            protected void onPostExecute(Pair<Drawable, View> pair) {
+                super.onPostExecute(pair);
+                View view = pair.second;
+                Drawable drawable = pair.first;
+                if(view instanceof RelativeLayout) {
+                    view.setBackground(drawable);
+                } else if(view instanceof ImageView) {
+                    ((ImageView) view).setImageDrawable(drawable);
                 }
-                getWindow().setBackgroundDrawable(bg);
-                device1.setBackground(deviceBg);
-                device2.setBackground(deviceBg);
-                device3.setBackground(deviceBg);
-                button_left_image.setImageDrawable(refreshButton);
-                button_right_image.setImageDrawable(settingButton);
-                button_right.setBackground(buttonBg1);
-                mButtonLeft.setBackground(buttonBg);
             }
-        }.execute();
+        }.execute(targetView);
     }
 
     private void refreshStats() {
@@ -387,11 +405,6 @@ public class MainActivity1 extends AppCompatActivity {
                     JSONArray tempArray = json.getJSONArray("");
                     JSONArray humiArray = json.getJSONArray("");
                     int numOfDevices = json.getInt("");
-                    getSharedPreferences("DEVICES", MODE_PRIVATE).edit().putInt("BLE", numOfDevices).apply();
-                    for (int i = 0; i < numOfDevices; i++) {
-                        String tempString = tempArray.get(i).toString();
-                        String humiString = humiArray.get(i).toString();
-                    }
                 } else if (cmd.equals("echo")) {
                     Toast.makeText(MainActivity1.this, "Hi 你好 こんにちは", Toast.LENGTH_SHORT).show();
                 }
@@ -415,7 +428,6 @@ public class MainActivity1 extends AppCompatActivity {
             }
             // Automatically connects to the device upon successful start-up initialization.
             boolean result = btApp.getService().connect(mDeviceAddress);
-            //ble_send("{\"CMD\":\"echo\"}\n");
             Log.d(TAG, "service connection result=" + result);
         }
 
@@ -459,7 +471,6 @@ public class MainActivity1 extends AppCompatActivity {
                     }
                 }.execute();
             } else if (BluetoothLeService.ACTION_DATA_AVAILABLE.equals(action)){
-                Log.d(TAG, "ACTION_DATA_AVAILABLE");
                 String data = intent.getStringExtra(BluetoothLeService.EXTRA_DATA);
                 processIncomingData(data);
             } else if(action.equals("intent.bt.get_value")) {

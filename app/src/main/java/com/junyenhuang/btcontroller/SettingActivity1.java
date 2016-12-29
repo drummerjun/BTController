@@ -1,18 +1,19 @@
 package com.junyenhuang.btcontroller;
 
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
-import android.support.v4.content.res.ResourcesCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AlertDialog;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
@@ -26,6 +27,7 @@ import android.widget.Toast;
 
 import com.junyenhuang.btcontroller.ble.BluetoothLeService;
 import com.squareup.picasso.Picasso;
+import com.squareup.picasso.Target;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -39,7 +41,6 @@ public class SettingActivity1 extends AppCompatActivity {
     private TextView hi1, hi2, hi3;
     private TextView lo1, lo2, lo3;
     private MultiSlider slider1, slider2, slider3;
-    private RelativeLayout mButtonLeft;
 
     //----------- use for BLE ----------------------
     private BluetoothAdapter mBluetoothAdapter;
@@ -49,6 +50,7 @@ public class SettingActivity1 extends AppCompatActivity {
     private BTApp btApp;
     private int oldLo1, oldLo2, oldLo3;
     private int oldHi1, oldHi2, oldHi3;
+    private Target toolbarTarget, deviceBgTarget;
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
@@ -66,7 +68,7 @@ public class SettingActivity1 extends AppCompatActivity {
 
         btApp = (BTApp)getApplication();
 
-        mHandler = new Handler();
+        //mHandler = new Handler();
         if (!getPackageManager().hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)) {
             Toast.makeText(this, "BLE Not Supported", Toast.LENGTH_SHORT).show();
             finish();
@@ -74,7 +76,7 @@ public class SettingActivity1 extends AppCompatActivity {
 
         mDeviceAddress = getSharedPreferences("DEVICES", MODE_PRIVATE).getString("MAC", mDeviceAddress);
         numOfDevices = getIntent().getIntExtra("DEVICE_NUM", 1);
-        mBluetoothAdapter = ((BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
+        //mBluetoothAdapter = ((BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE)).getAdapter();
     }
 
     @Override
@@ -162,15 +164,15 @@ public class SettingActivity1 extends AppCompatActivity {
             }
         });
 
-        mButtonLeft = (RelativeLayout)findViewById(R.id.bottom_button_1);
-        mButtonLeft.setOnClickListener(new View.OnClickListener() {
+        RelativeLayout button_left = (RelativeLayout)findViewById(R.id.bottom_button_1);
+        button_left.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 revertLimits();
             }
         });
 
-        final RelativeLayout button_right = (RelativeLayout)findViewById(R.id.bottom_button_2);
+        RelativeLayout button_right = (RelativeLayout)findViewById(R.id.bottom_button_2);
         button_right.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -178,42 +180,72 @@ public class SettingActivity1 extends AppCompatActivity {
             }
         });
 
-        final ImageView button_left_image = (ImageView)findViewById(R.id.image_button_1);
-        final ImageView button_right_image = (ImageView)findViewById(R.id.image_button_2);
+        ImageView button_left_image = (ImageView)findViewById(R.id.image_button_1);
+        ImageView button_right_image = (ImageView)findViewById(R.id.image_button_2);
 
-        final ImageView device_1_image = (ImageView)findViewById(R.id.static_icon_1);
-        final ImageView device_2_image = (ImageView)findViewById(R.id.static_icon_2);
-        final ImageView device_3_image = (ImageView)findViewById(R.id.static_icon_3);
+        ImageView device_1_image = (ImageView)findViewById(R.id.static_icon_1);
+        ImageView device_2_image = (ImageView)findViewById(R.id.static_icon_2);
+        ImageView device_3_image = (ImageView)findViewById(R.id.static_icon_3);
         Picasso.with(this).load(R.drawable.plug2).into(device_1_image);
         Picasso.with(this).load(R.drawable.plug2).into(device_2_image);
         Picasso.with(this).load(R.drawable.plug2).into(device_3_image);
 
+        toolbarTarget = new Target(){
+            @Override
+            public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+                getSupportActionBar().setBackgroundDrawable(new BitmapDrawable(getResources(), bitmap));
+            }
+
+            @Override
+            public void onBitmapFailed(Drawable errorDrawable) {
+                Log.e(TAG, "Picasso windowsBg failed");
+            }
+
+            @Override
+            public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+            }
+        };
+        deviceBgTarget = new Target(){
+            @Override
+            public void onBitmapLoaded(Bitmap bitmap, Picasso.LoadedFrom from) {
+                device1.setBackground(new BitmapDrawable(getResources(), bitmap));
+                device2.setBackground(new BitmapDrawable(getResources(), bitmap));
+                device3.setBackground(new BitmapDrawable(getResources(), bitmap));
+            }
+
+            @Override
+            public void onBitmapFailed(Drawable errorDrawable) {
+                Log.e(TAG, "Picasso deviceBG failed");
+            }
+
+            @Override
+            public void onPrepareLoad(Drawable placeHolderDrawable) {
+
+            }
+        };
+        Picasso.with(this).load(R.drawable.head_bar).into(toolbarTarget);
+        Picasso.with(this).load(R.drawable.setting_bg).into(deviceBgTarget);
+
+        loadAndSetDrawable(R.drawable.selector_button_bg, button_left);
+        loadAndSetDrawable(R.drawable.selector_button_bg, button_right);
+        loadAndSetDrawable(R.drawable.selector_default, button_left_image);
+        loadAndSetDrawable(R.drawable.selector_apply, button_right_image);
+    }
+
+    private void loadAndSetDrawable(final int resId, final View targetView) {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                final Drawable toolbarBg = ResourcesCompat.getDrawable(getResources(), R.drawable.head_bar, null);
-                final Drawable bg = ResourcesCompat.getDrawable(getResources(), R.drawable.background2, null);
-                final Drawable deviceBg = ResourcesCompat.getDrawable(getResources(), R.drawable.setting_bg, null);
-                final Drawable buttonBg = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
-                final Drawable buttonBg1 = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_button_bg, null);
-                final Drawable revertButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_default, null);
-                final Drawable uploadButton = ResourcesCompat.getDrawable(getResources(), R.drawable.selector_apply, null);
+                final Drawable drawable = ContextCompat.getDrawable(SettingActivity1.this, resId);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
-                            getSupportActionBar().setBackgroundDrawable(toolbarBg);
-                        } catch (NullPointerException e) {
-                            e.printStackTrace();
+                        if(targetView instanceof RelativeLayout) {
+                            targetView.setBackground(drawable);
+                        } else if(targetView instanceof ImageView) {
+                            ((ImageView) targetView).setImageDrawable(drawable);
                         }
-                        getWindow().setBackgroundDrawable(bg);
-                        device1.setBackground(deviceBg);
-                        device2.setBackground(deviceBg);
-                        device3.setBackground(deviceBg);
-                        button_left_image.setImageDrawable(revertButton);
-                        button_right_image.setImageDrawable(uploadButton);
-                        button_right.setBackground(buttonBg1);
-                        mButtonLeft.setBackground(buttonBg);
                     }
                 });
             }
@@ -228,14 +260,10 @@ public class SettingActivity1 extends AppCompatActivity {
         JSONObject uploadObj = new JSONObject();
         try {
             uploadObj.put("", "");
-            oldLo1 = slider1.getThumb(0).getValue() * 10;
-            oldHi1 = slider1.getThumb(1).getValue() * 10;
-            uploadObj.put("", oldHi1);
-            uploadObj.put("", oldLo1);
         } catch (JSONException e) {
             e.printStackTrace();
         }
-        bleSend(uploadObj.toString() + "\n", true);
+        bleSend(uploadObj.toString(), true);
     }
 
     private void revertLimits() {
@@ -280,10 +308,6 @@ public class SettingActivity1 extends AppCompatActivity {
                     JSONArray loArray = json.getJSONArray("");
                     JSONArray hiArray = json.getJSONArray("");
                     numOfDevices = json.getInt("");
-                    for (int i = 0; i < numOfDevices; i++) {
-                        String lo = loArray.get(i).toString();
-                        String hi = hiArray.get(i).toString();
-                    }
                 }
             } catch (JSONException e) {
                 e.printStackTrace();
